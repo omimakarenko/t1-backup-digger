@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+(function(){
+  var theme = 'dark';
+  try{
+    var saved = localStorage.getItem('t1bd-theme');
+    if(saved === 'light' || saved === 'dark') theme = saved;
+    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
+  }catch(e){}
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
+<title>T1 Backup Digger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #19191a;
+    --bg-glow: radial-gradient(1100px 500px at 15% -10%, #232323 0%, transparent 60%);
+    --panel: #212123;
+    --panel-2: #29292b;
+    --panel-border: #343436;
+    --pad-empty-bg: #2c3924;
+    --pad-empty-text: #8a9c7c;
+    --text-secondary: #b7bcc2;
+    --fill: #7f9a5a;
+    --fill-text: #182208;
+    --fill-hover: #8ca863;
+    --accent: #d7dade;
+    --emphasis: #ffffff;
+    --btn-text: #16171a;
+    --text: #edeff1;
+    --muted: #a8adb4;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+    --disp: 'Manrope', sans-serif;
+  }
+  :root[data-theme="light"]{
+    --bg: #f2f2f1;
+    --bg-glow: radial-gradient(1100px 500px at 15% -10%, #ffffff 0%, transparent 60%);
+    --panel: #ffffff;
+    --panel-2: #eeeeed;
+    --panel-border: #d7d7d5;
+    --pad-empty-bg: #dfe6d3;
+    --pad-empty-text: #5c6b4d;
+    --text-secondary: #4b4f54;
+    --fill: #7a9a54;
+    --fill-text: #182208;
+    --fill-hover: #6c8a49;
+    --accent: #2b2d30;
+    --emphasis: #000000;
+    --btn-text: #f5f5f4;
+    --text: #1b1c1d;
+    --muted: #5c6167;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  button{cursor:pointer;}
+  button:disabled{cursor:not-allowed;}
+  .dragging{opacity:.4;}
+  .project, .target-panel, .add-tile, .history-popover, input[type=text], select, textarea{
+    transition:background-color .2s, border-color .2s, color .2s;
+  }
+  body{
+    background:var(--bg-glow), var(--bg);
+    background-attachment:fixed;
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    padding:20px 14px 40px;
+    transition:background-color .2s, color .2s;
+  }
+  a{color:inherit;}
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--panel-border);padding-bottom:14px;}
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand h1{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:0.01em;margin:0;display:flex;align-items:center;gap:9px;}
+  .t1-tag{
+    font-family:var(--mono);font-weight:600;font-size:13px;letter-spacing:.02em;
+    border:1.5px solid var(--text);border-radius:5px;padding:2px 6px 1px;line-height:1.3;
+  }
+  .brand p{margin:2px 0 0;color:var(--muted);font-size:13px;}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .header-right-text{display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+  header.top .badge{font-family:var(--sans);font-size:12px;color:var(--muted);padding:6px 10px;border-radius:20px;white-space:nowrap;}
+  header.top .badge a{text-decoration:underline;text-underline-offset:2px;}
+  header.top .badge a:hover{opacity:.7;}
+  .offline-note{font-family:var(--mono);font-size:10px;color:var(--text-secondary);text-align:right;padding:0 4px;max-width:320px;}
+
+  .theme-toggle{
+    --tw:40px; --th:22px; --tp:3px;
+    width:var(--tw);height:var(--th);border-radius:999px;flex:none;padding:0;
+    background:var(--panel-2);border:1px solid var(--panel-border);
+    position:relative;transition:background-color .2s;
+  }
+  .theme-toggle .thumb{
+    position:absolute;top:var(--tp);left:var(--tp);
+    width:calc(var(--th) - 2*var(--tp));height:calc(var(--th) - 2*var(--tp));
+    border-radius:50%;background:var(--text);
+    transition:left .2s ease,background-color .2s;
+  }
+  :root[data-theme="light"] .theme-toggle .thumb{ left:calc(var(--tw) - var(--th) + var(--tp)); }
+  .theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+
+  section{margin-bottom:20px;}
+
+  /* add-backup tile (compact, lives at the bottom of the sources column) */
+  .add-tile{
+    border-radius:12px;
+    background:var(--panel);
+    padding:14px 16px;
+    display:flex;align-items:center;gap:12px;
+    cursor:pointer;
+    transition:background-color .15s;
+  }
+  .add-tile:hover, .add-tile.drag{background:var(--panel-2);}
+  .add-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .add-tile .plus{
+    width:34px;height:34px;border-radius:8px;flex:none;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--panel-2);
+    font-family:var(--disp);font-size:19px;font-weight:600;color:var(--muted);
+  }
+  .add-tile .text strong{display:block;font-family:var(--disp);font-size:13.5px;font-weight:600;}
+  .add-tile .text span{display:block;color:var(--muted);font-size:11.5px;margin-top:2px;}
+  .add-tile input{display:none;}
+
+  /* layout */
+  .board{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;}
+  .sources-col{flex:1 1 0; min-width:300px;display:flex;flex-direction:column;gap:12px;}
+  .target-col{flex:1 1 0; min-width:300px;position:sticky;top:20px;}
+
+  /* project card */
+  .project{background:var(--panel);border-radius:12px;padding:13px 13px 12px;}
+  .project-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+  .project-head .name{font-family:var(--disp);font-weight:600;font-size:14.5px;overflow-wrap:anywhere;}
+  .project-head .count{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;}
+  .project-head .exported-hint{color:var(--text-secondary);cursor:help;}
+  .project-head .rm{background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px;border-radius:6px;}
+  .project-head .rm:hover{color:var(--text);background:var(--panel-2);}
+  .project-notes{
+    font-size:11.5px;color:var(--text-secondary);line-height:1.5;
+    margin-top:10px;overflow-wrap:anywhere;
+  }
+  .project-notes-block{margin-top:2px;}
+  .notes-textarea{
+    width:100%;margin-top:8px;
+    background:var(--panel-2);border:1px solid var(--panel-border);color:var(--text);
+    padding:8px 10px;border-radius:7px;font-family:var(--mono);font-size:12px;resize:vertical;min-height:78px;overflow:hidden;
+  }
+  .notes-textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent;}
+  .notes-actions{display:flex;align-items:center;gap:14px;margin-top:6px;flex-wrap:wrap;}
+  .notes-status{font-size:10.5px;color:var(--text-secondary);}
+  .project-links-row{display:flex;align-items:center;gap:16px;}
+  .rearrange-hint{font-size:11.5px;color:var(--text-secondary);line-height:1.5;}
+
+  .padgrid{display:grid;grid-template-columns:repeat(8,minmax(46px,1fr));gap:3px;overflow-x:auto;padding-bottom:2px;}
+  .pad{
+    position:relative;aspect-ratio:1/1;border-radius:0;overflow:hidden;border:none;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:var(--disp);font-weight:600;cursor:default;user-select:none;-webkit-user-drag:element;
+    background:var(--pad-empty-bg);color:var(--pad-empty-text);
+    padding:2px;
+  }
+  .pad .bn{font-size:16px;line-height:1;}
+  .pad .meta{
+    font-family:var(--mono);font-weight:400;font-size:8px;margin-top:2px;opacity:.85;
+    max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .pad.filled{
+    background:var(--fill);color:var(--fill-text);cursor:grab;
+  }
+  .pad.filled:hover{background:var(--fill-hover);}
+  .pad.filled:focus-visible, .pad.empty:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  .pad .histbtn{
+    position:absolute;bottom:2px;right:2px;width:14px;height:14px;
+    background:none;border:none;color:var(--pad-empty-bg);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:opacity .15s;
+  }
+  .pad .histbtn:hover, .pad .histbtn.active{opacity:.6;}
+  .pad.empty{cursor:default;}
+  .pad.empty .bn{opacity:.6;}
+
+  /* history popover */
+  .history-popover{
+    position:fixed;z-index:500;min-width:230px;max-width:290px;
+    background:var(--panel-2);border-radius:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.45);padding:8px;
+  }
+  .history-popover[hidden]{display:none;}
+  .hp-head{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px;margin-bottom:6px;}
+  .hp-head .hp-title{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);}
+  .hp-close{background:none;border:none;color:var(--text-secondary);font-size:15px;cursor:pointer;line-height:1;padding:2px 4px;}
+  .hp-close:hover{color:var(--text);}
+
+  .context-menu{
+    position:fixed;z-index:600;min-width:110px;
+    background:var(--panel-2);border-radius:8px;
+    box-shadow:0 12px 32px rgba(0,0,0,.45);padding:4px;
+  }
+  .context-menu[hidden]{display:none;}
+  .cm-item{
+    display:block;width:100%;text-align:left;background:none;border:none;
+    color:var(--text);font-family:var(--sans);font-size:12.5px;
+    padding:7px 10px;border-radius:5px;cursor:pointer;
+  }
+  .cm-item:hover{background:var(--panel-border);}
+  .hp-list{display:flex;flex-direction:column;gap:4px;max-height:340px;overflow-y:auto;}
+  .hp-item{
+    position:relative;
+    display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;
+    background:var(--fill);color:var(--fill-text);border-radius:0;
+    padding:6px 20px 6px 8px;cursor:grab;font-family:var(--mono);width:100%;
+    user-select:none;-webkit-user-drag:element;
+  }
+  .hp-item:hover{background:var(--fill-hover);}
+  .hp-item .hp-headline{font-family:var(--disp);font-weight:600;font-size:12.5px;color:var(--fill-text);}
+  .hp-item .hp-meta{font-size:10px;color:var(--fill-text);opacity:.72;}
+  .hp-item .hp-from{font-size:9px;color:var(--fill-text);opacity:.6;margin-top:1px;overflow-wrap:anywhere;}
+
+  /* target */
+  .target-panel{background:var(--panel);border-radius:12px;padding:13px;}
+  .target-panel .thead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+  .target-panel .thead .name{font-family:var(--disp);font-weight:700;font-size:14.5px;letter-spacing:.03em;}
+  .target-panel .thead .count{font-family:var(--mono);font-size:11px;color:var(--muted);}
+
+  .pad.tgt{cursor:default;}
+  .pad.tgt.filled{cursor:grab;}
+  .pad.tgt.drag-over{outline:2px dashed var(--accent);outline-offset:2px;background:rgba(120,120,120,.14);}
+  .pad .clear, .hp-item .clear{
+    position:absolute;top:2px;right:2px;width:14px;height:14px;
+    background:none;border:none;color:var(--pad-empty-bg);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;
+    transition:opacity .15s;
+  }
+  .pad.filled .clear:hover, .pad.filled .clear:focus-visible,
+  .hp-item .clear:hover, .hp-item .clear:focus-visible{opacity:.6;}
+
+  .target-actions{display:flex;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;}
+  .linklike{background:none;border:none;color:var(--text-secondary);font-family:var(--mono);font-size:11px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;}
+  .linklike:hover{color:var(--text);}
+
+  .export-box{margin-top:16px;padding-top:14px;border-top:1px solid var(--panel-border);display:flex;flex-direction:column;gap:10px;}
+  label.field{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;flex-direction:column;gap:5px;}
+  label.field .field-hint{text-transform:none;color:var(--text-secondary);font-size:10px;letter-spacing:normal;}
+  input[type=text], select, textarea{
+    background:var(--panel-2);border:1px solid var(--panel-border);color:var(--text);
+    padding:8px 10px;border-radius:7px;font-family:var(--mono);font-size:12.5px;
+  }
+  textarea{resize:vertical;min-height:78px;overflow:hidden;}
+  input[type=text]:focus, select:focus, textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent;}
+  select{appearance:auto;}
+
+  .export-btn{
+    background:var(--emphasis);color:var(--btn-text);border:none;border-radius:8px;padding:11px 14px;
+    font-family:var(--disp);font-weight:700;font-size:13.5px;letter-spacing:.02em;cursor:pointer;
+    text-transform:uppercase;
+  }
+  .export-btn:hover{filter:brightness(.92);}
+  .export-btn:disabled{opacity:.35;cursor:not-allowed;filter:none;}
+  .export-status{font-family:var(--mono);font-size:11.5px;color:var(--text);min-height:14px;}
+
+  details.howitworks{margin-top:20px;background:var(--panel);border-radius:12px;padding:4px 16px;}
+  details.howitworks summary{cursor:pointer;padding:12px 0;font-family:var(--disp);font-weight:600;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+  details.howitworks[open] summary{color:var(--text);}
+  details.howitworks .body{padding-bottom:18px;font-size:14.5px;line-height:1.7;color:var(--text);}
+  details.howitworks .body p{margin:0 0 18px;}
+  details.howitworks .body p:last-child{margin-bottom:0;}
+  details.howitworks .body code{font-family:var(--mono);background:var(--panel-2);padding:1px 5px;border-radius:4px;font-size:12.5px;}
+  details.howitworks .body hr{border:none;border-top:1px solid var(--panel-border);margin:6px 0 18px;}
+
+  .footnote{
+    margin:18px 4px 0;
+    font-size:11.5px;line-height:1.6;color:var(--text-secondary);
+  }
+
+  @media (max-width:480px){
+    .pad .bn{font-size:13px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div>
+        <h1><span class="t1-tag">T1</span> Backup Digger</h1>
+        <p>Reassemble pattern banks from Torso T‑1 backups</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="header-right-text">
+        <div class="badge"><strong>Unofficial tool by <a href="https://www.instagram.com/omi_i_am/" target="_blank" rel="noopener">Omi Makarenko</a></strong></div>
+        <div class="offline-note">Runs entirely offline in your browser,<br>and no data is sent out to the internet.</div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Switch to light theme" title="Toggle light / dark mode">
+        <span class="thumb"></span>
+      </button>
+    </div>
+  </header>
+
+  <section>
+    <div class="board">
+      <div class="sources-col" id="sourcesCol">
+        <div class="add-tile" id="addTile" tabindex="0" role="button" aria-label="Add a backup">
+          <div class="plus">+</div>
+          <div class="text">
+            <strong>Add a backup</strong>
+            <span>Drop a Torso .zip here, or click to browse</span>
+          </div>
+          <input type="file" id="fileInput" accept=".zip" multiple>
+        </div>
+      </div>
+
+      <div class="target-col">
+        <div class="target-panel">
+          <div class="thead">
+            <div class="name">New project</div>
+            <div class="count"><span id="filledCount">0</span>/16</div>
+          </div>
+          <div class="padgrid" id="targetGrid"></div>
+          <div class="target-actions">
+            <button class="linklike" id="clearAllBtn">clear all</button>
+          </div>
+
+          <div class="export-box">
+            <label class="field">File name
+              <input type="text" id="exportName" value="torso-merged-project.zip">
+            </label>
+            <label class="field">Notes <span class="field-hint">(saved in the .zip itself — shows up again if you drop this file back in later)</span>
+              <textarea id="exportNotes" rows="4" placeholder="Your notes about this project and the banks in it will help you remember what's what next time you open it here. Jot down memories of individual banks, or anything else you find useful."></textarea>
+            </label>
+            <label class="field">Device settings (Settings / Wifi)
+              <select id="settingsSource">
+                <option value="">don't include</option>
+              </select>
+            </label>
+            <button class="export-btn" id="exportBtn" disabled>Download .zip</button>
+            <div class="export-status" id="exportStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <details class="howitworks">
+    <summary>What this tool does</summary>
+    <div class="body">
+      <p>Torso saves each Bank as its own file. This tool moves, copies, and rearranges those files between backups — it never opens or changes what's inside a pattern, so there's no way it can touch your patterns, CC data, or anything else you've programmed.</p>
+      <p>Drag a bank from any loaded backup straight into New Project to use it there — the original stays put, so the same bank can go into several slots if you want. Dragging the whole cell carries its current save and its previous save together; grab just one specific version instead from the small arrow icon in the corner.</p>
+      <p>Many banks have an earlier saved version sitting right behind the current one. When that's the case, hover the arrow icon to see every version you've got for that bank — across every backup you've loaded, not just this one — or click it to pin the list open while you drag pieces around. It's the easiest way to dig up an old take you thought was gone.</p>
+      <p>Each loaded backup can carry its own notes — click "add a note" under any project to jot down what's in it. Notes are saved right inside the .zip itself, so they're there again next time you drop that same file back in, even on a different computer.</p>
+      <p>Want to reorganize a backup itself, not just build something new from it? Click "rearrange cells" on any loaded project to drag banks around within it — or between two backups you've both put in rearrange mode — then "save & download copy" for a new .zip with the new layout. Replace your old file with it to keep the change.</p>
+      <p>Right-click any bank to Copy it, then right-click an empty or filled cell to Paste — handy for stamping the same starter template (a scale, a CV setup, whatever you like to improvise from) into several slots at once, in New Project or while rearranging a backup.</p>
+      <p>Torso's Project backup format has changed across firmware versions over the T1's life, and this tool only understands the current one, introduced in firmware 2.1. Backups made on much older firmware may not open correctly here.</p>
+      <hr>
+      <p>Something you might want to know: inside Torso's own backup files, numbering starts from 0 — so what this tool (and the device screen) calls banks 1–16 are technically cells 0–15 on disk. Only matters if you're ever poking at the .zip by hand.</p>
+    </div>
+  </details>
+
+  <!-- VERSION NUMBER — bump this on every edit to this file. Currently: 1.008 -->
+  <p class="footnote">v1.008 · Built August 10, 2026 — tested against T1 firmware 2.1.5.<br>© 2026 Omi Makarenko. All rights reserved — reuse, adaptation, or redistribution requires prior written permission and credit to the author. Provided as-is with no warranty. Not affiliated with or endorsed by Torso Electronics.</p>
+
+  <div class="history-popover" id="historyPopover" hidden>
+    <div class="hp-head">
+      <span class="hp-title" id="hpTitle"></span>
+      <button class="hp-close" id="hpClose" aria-label="Close">×</button>
+    </div>
+    <div class="hp-list" id="hpList"></div>
+  </div>
+
+  <div class="context-menu" id="cellContextMenu" hidden></div>
+
+</div>
+
+<script>
+// ---------------------------------------------------------------------
+// Minimal, self-contained ZIP reader/writer (no external dependency).
+// Reads STORE and DEFLATE entries (via native DecompressionStream) and
+// writes new archives using STORE (uncompressed) — plenty for ~100KB
+// bank files, and keeps this tool a single offline-capable HTML file.
+// ---------------------------------------------------------------------
+// Decodes the MS-DOS date/time pair zip files store per entry. Returns null
+// for the common "no real timestamp" placeholder (1980-01-01) so callers can
+// fall back gracefully instead of showing a meaningless date.
+function dosToDate(dosDate, dosTime){
+  if(!dosDate) return null;
+  const year = ((dosDate >> 9) & 0x7f) + 1980;
+  const month = (dosDate >> 5) & 0x0f;
+  const day = dosDate & 0x1f;
+  if(year <= 1980 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const hour = (dosTime >> 11) & 0x1f;
+  const min = (dosTime >> 5) & 0x3f;
+  const sec = (dosTime & 0x1f) * 2;
+  const d = new Date(year, month-1, day, hour, min, sec);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+async function readZip(arrayBuffer){
+  const buf = new Uint8Array(arrayBuffer);
+  const dv = new DataView(arrayBuffer);
+  const minEOCD = 22, maxComment = 65535;
+  let eocdOffset = -1;
+  const searchStart = Math.max(0, buf.length - minEOCD - maxComment);
+  for(let i = buf.length - minEOCD; i >= searchStart; i--){
+    if(dv.getUint32(i, true) === 0x06054b50){ eocdOffset = i; break; }
+  }
+  if(eocdOffset < 0) throw new Error('End-of-central-directory not found — the file is corrupt or not a .zip');
+  const cdEntries = dv.getUint16(eocdOffset+10, true);
+  const cdOffset = dv.getUint32(eocdOffset+16, true);
+  const archiveCommentLen = dv.getUint16(eocdOffset+20, true);
+  const comment = archiveCommentLen
+    ? new TextDecoder('utf-8').decode(buf.slice(eocdOffset+22, eocdOffset+22+archiveCommentLen))
+    : '';
+
+  const files = {};
+  let p = cdOffset;
+  for(let i=0;i<cdEntries;i++){
+    const sig = dv.getUint32(p, true);
+    if(sig !== 0x02014b50) throw new Error('Corrupt .zip central directory record');
+    const method = dv.getUint16(p+10, true);
+    const dosTime = dv.getUint16(p+12, true);
+    const dosDate = dv.getUint16(p+14, true);
+    const compSize = dv.getUint32(p+20, true);
+    const nameLen = dv.getUint16(p+28, true);
+    const extraLen = dv.getUint16(p+30, true);
+    const commentLen = dv.getUint16(p+32, true);
+    const localHeaderOffset = dv.getUint32(p+42, true);
+    const name = new TextDecoder('utf-8').decode(buf.slice(p+46, p+46+nameLen));
+    const isDir = name.endsWith('/');
+    files[name] = {
+      dir: isDir,
+      mtime: dosToDate(dosDate, dosTime),
+      async async(type){
+        const lp = localHeaderOffset;
+        if(dv.getUint32(lp, true) !== 0x04034b50) throw new Error('Corrupt local file header in .zip');
+        const lNameLen = dv.getUint16(lp+26, true);
+        const lExtraLen = dv.getUint16(lp+28, true);
+        const dataStart = lp + 30 + lNameLen + lExtraLen;
+        const compressed = buf.slice(dataStart, dataStart+compSize);
+        let out;
+        if(method === 0){
+          out = compressed;
+        } else if(method === 8){
+          if(typeof DecompressionStream === 'undefined'){
+            throw new Error('This file is DEFLATE-compressed and your browser doesn\'t support DecompressionStream. Please update your browser.');
+          }
+          const ds = new DecompressionStream('deflate-raw');
+          const stream = new Blob([compressed]).stream().pipeThrough(ds);
+          out = new Uint8Array(await new Response(stream).arrayBuffer());
+        } else {
+          throw new Error('Unsupported .zip compression method: ' + method);
+        }
+        if(type === 'uint8array') return out;
+        if(type === 'string') return new TextDecoder('utf-8').decode(out);
+        throw new Error('Internal error: unknown read type ' + type);
+      }
+    };
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return { files, comment };
+}
+
+const CRC_TABLE = (function(){
+  const t = [];
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes){
+  let crc = 0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+class MiniZipWriter{
+  constructor(){ this.entries = []; }
+  file(name, data){
+    const bytes = (typeof data === 'string') ? new TextEncoder().encode(data)
+      : (data instanceof Uint8Array ? data : new Uint8Array(data));
+    this.entries.push({name, bytes});
+    return this;
+  }
+  async generateAsync({type, comment}){
+    const parts = [], centralParts = [];
+    let offset = 0;
+    const dosTime = 0, dosDate = 0x21; // fixed timestamp, exact value is not meaningful here
+    for(const e of this.entries){
+      const nameBytes = new TextEncoder().encode(e.name);
+      const crc = crc32(e.bytes);
+      const size = e.bytes.length;
+
+      const lh = new Uint8Array(30 + nameBytes.length);
+      const ldv = new DataView(lh.buffer);
+      ldv.setUint32(0, 0x04034b50, true);
+      ldv.setUint16(4, 20, true);
+      ldv.setUint16(6, 0, true);
+      ldv.setUint16(8, 0, true);
+      ldv.setUint16(10, dosTime, true);
+      ldv.setUint16(12, dosDate, true);
+      ldv.setUint32(14, crc, true);
+      ldv.setUint32(18, size, true);
+      ldv.setUint32(22, size, true);
+      ldv.setUint16(26, nameBytes.length, true);
+      ldv.setUint16(28, 0, true);
+      lh.set(nameBytes, 30);
+      parts.push(lh, e.bytes);
+
+      const ch = new Uint8Array(46 + nameBytes.length);
+      const cdv = new DataView(ch.buffer);
+      cdv.setUint32(0, 0x02014b50, true);
+      cdv.setUint16(4, 20, true);
+      cdv.setUint16(6, 20, true);
+      cdv.setUint16(8, 0, true);
+      cdv.setUint16(10, 0, true);
+      cdv.setUint16(12, dosTime, true);
+      cdv.setUint16(14, dosDate, true);
+      cdv.setUint32(16, crc, true);
+      cdv.setUint32(20, size, true);
+      cdv.setUint32(24, size, true);
+      cdv.setUint16(28, nameBytes.length, true);
+      cdv.setUint32(42, offset, true);
+      ch.set(nameBytes, 46);
+      centralParts.push(ch);
+
+      offset += lh.length + e.bytes.length;
+    }
+    const cdStart = offset;
+    const cdSize = centralParts.reduce((a,c)=>a+c.length, 0);
+
+    const commentBytes = comment ? new TextEncoder().encode(comment).slice(0, 65535) : new Uint8Array(0);
+    const eocd = new Uint8Array(22 + commentBytes.length);
+    const edv = new DataView(eocd.buffer);
+    edv.setUint32(0, 0x06054b50, true);
+    edv.setUint16(8, this.entries.length, true);
+    edv.setUint16(10, this.entries.length, true);
+    edv.setUint32(12, cdSize, true);
+    edv.setUint32(16, cdStart, true);
+    edv.setUint16(20, commentBytes.length, true);
+    eocd.set(commentBytes, 22);
+
+    const blob = new Blob([...parts, ...centralParts, eocd]);
+    if(type === 'blob') return blob;
+    if(type === 'arraybuffer') return await blob.arrayBuffer();
+    throw new Error('Internal error: unknown output format ' + type);
+  }
+}
+
+(function(){
+  const sourcesCol = document.getElementById('sourcesCol');
+  const addTile = document.getElementById('addTile');
+  const themeToggle = document.getElementById('themeToggle');
+  const fileInput = document.getElementById('fileInput');
+  const targetGrid = document.getElementById('targetGrid');
+  const filledCountEl = document.getElementById('filledCount');
+  const clearAllBtn = document.getElementById('clearAllBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportName = document.getElementById('exportName');
+  const exportNotes = document.getElementById('exportNotes');
+
+  // Grows a textarea to fit whatever's in it instead of clipping/scrolling —
+  // used for both the export notes field and each per-project notes editor.
+  function autoResizeTextarea(el){
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+  exportNotes.addEventListener('input', ()=> autoResizeTextarea(exportNotes));
+  const exportStatus = document.getElementById('exportStatus');
+  const settingsSource = document.getElementById('settingsSource');
+  const historyPopover = document.getElementById('historyPopover');
+  const hpTitle = document.getElementById('hpTitle');
+  const hpList = document.getElementById('hpList');
+  const hpClose = document.getElementById('hpClose');
+  const cellContextMenu = document.getElementById('cellContextMenu');
+
+  let sources = [];          // {id, label, banks:{n:{main:{...}, backup:{...}|null}}, settingsText, wifiText}
+  let targetSlots = new Array(17).fill(null); // 1..16, each {sourceId,sourceLabel,bank,variant,size,rev,version,bytes}
+  let idCounter = 1;
+  let popoverPinned = false;
+  let popoverBank = null;
+  let popoverTargetSlot = null;
+  let hideTimer = null;
+  let cellClipboard = null; // {sourceLabel, bank, variant, size, rev, version, bytes}
+
+  function parseHeader(bytes){
+    const vlen = bytes[0];
+    const version = new TextDecoder('ascii').decode(bytes.slice(1, 1+vlen));
+    const rev = bytes[1+vlen] | (bytes[1+vlen+1] << 8);
+    return {version, rev, size: bytes.length};
+  }
+
+  function fmtSize(n){
+    if(n < 1024) return n + 'B';
+    return (n/1024).toFixed(1) + 'KB';
+  }
+
+  function fmtDate(d){
+    if(!d) return null;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} · ${hh}:${mm}`;
+  }
+
+  async function handleFiles(fileList){
+    for(const file of fileList){
+      if(!file.name.toLowerCase().endsWith('.zip')) continue;
+      let zip;
+      try{
+        const buf = await file.arrayBuffer();
+        zip = await readZip(buf);
+      }catch(e){
+        alert('Couldn\'t read "' + file.name + '" as a .zip: ' + e.message);
+        continue;
+      }
+      const label = file.name.replace(/\.zip$/i,'');
+      const existingIdx = sources.findIndex(s => s.label === label);
+      const src = { id: existingIdx>=0 ? sources[existingIdx].id : 'src'+(idCounter++), label, banks: {}, settingsText:null, wifiText:null, exportedAround:null, notes: zip.comment || '', notesEditing:false, rearranging:false, rearrangeSnapshot:null };
+
+      const entries = Object.keys(zip.files);
+      let latestMtime = null;
+      for(const key of entries){
+        const entry = zip.files[key];
+        if(entry.dir) continue;
+        const base = key.split('/').pop();
+        const m = base.match(/^(\d{1,2})\.t1(-backup)?$/);
+        if(m){
+          const rawBank = parseInt(m[1],10);
+          if(rawBank < 0 || rawBank > 15) continue;
+          const bank = rawBank + 1; // Torso addresses banks 0–15 internally, shows 1–16 to the user
+          const isBackup = !!m[2];
+          const bytes = await entry.async('uint8array');
+          let hdr;
+          try{ hdr = parseHeader(bytes); }catch(e){ continue; }
+          if(!src.banks[bank]) src.banks[bank] = {main:null, backup:null, rawFile: rawBank + '.t1'};
+          src.banks[bank][isBackup?'backup':'main'] = {...hdr, bytes, originLabel: label};
+          if(entry.mtime && (!latestMtime || entry.mtime > latestMtime)) latestMtime = entry.mtime;
+        } else if(base === 'Settings.json'){
+          src.settingsText = await entry.async('string');
+        } else if(base === 'Wifi.json'){
+          src.wifiText = await entry.async('string');
+        }
+      }
+      src.exportedAround = latestMtime;
+      if(existingIdx>=0) sources[existingIdx] = src; else sources.push(src);
+    }
+    renderSources();
+    renderSettingsOptions();
+  }
+
+  function renderSettingsOptions(){
+    const current = settingsSource.value;
+    settingsSource.innerHTML = '<option value="">don\'t include</option>' +
+      sources.map(s=>`<option value="${s.id}">from "${escapeHtml(s.label)}"</option>`).join('');
+    if(sources.some(s=>s.id===current)) settingsSource.value = current;
+  }
+
+  // A plain {...banks} shallow copy still shares each bank's own
+  // {main,backup,rawFile} wrapper object with the original — so an in-place
+  // edit to that wrapper (e.g. clearing just the backup) would leak into a
+  // snapshot taken earlier and survive a Cancel. Clone one level deeper.
+  function cloneBanks(banks){
+    const out = {};
+    for(const k of Object.keys(banks)){
+      const b = banks[k];
+      out[k] = { main: b.main, backup: b.backup, rawFile: b.rawFile };
+    }
+    return out;
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Rebuilds this exact backup — every bank it has, untouched — as a new
+  // .zip carrying an updated note in the archive comment. Used to let
+  // someone annotate a backup they've already loaded, not just a freshly
+  // assembled project.
+  async function reexportSourceWithNotes(src, noteText){
+    const zip = new MiniZipWriter();
+    for(const bankNumStr of Object.keys(src.banks)){
+      const bankNum = parseInt(bankNumStr, 10);
+      const bank = src.banks[bankNumStr];
+      const rawIndex = bankNum - 1; // UI shows 1–16, Torso's own files are 0–15
+      if(bank.main) zip.file(`${rawIndex}.t1`, bank.main.bytes);
+      if(bank.backup) zip.file(`${rawIndex}.t1-backup`, bank.backup.bytes);
+    }
+    if(src.settingsText) zip.file('Settings.json', src.settingsText);
+    if(src.wifiText) zip.file('Wifi.json', src.wifiText);
+    const blob = await zip.generateAsync({type:'blob', comment: noteText});
+    const name = src.label + '.zip';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }
+
+  // Puts a bank into a target slot on drop. `payload.both` (dragging the
+  // main cell itself) carries the current save AND its previous save
+  // together, like the physical bank would. `payload.variant` alone
+  // (dragging one specific entry out of the version popover) carries only
+  // that one state.
+  function assignSlot(i, payload){
+    if(payload.direct){
+      targetSlots[i] = {
+        sourceLabel: payload.sourceLabel, bank: payload.bank,
+        main: payload.variant==='main' ? {...payload.direct} : null,
+        backup: payload.variant==='backup' ? {...payload.direct} : null,
+      };
+      renderTarget();
+      return;
+    }
+    const src = sources.find(s=>s.id===payload.sourceId);
+    if(!src) return;
+    const bank = src.banks[payload.bank];
+    if(!bank) return;
+    if(payload.both){
+      if(!bank.main && !bank.backup) return;
+      targetSlots[i] = {
+        sourceLabel: src.label, bank: payload.bank,
+        main: bank.main ? {...bank.main} : null,
+        backup: bank.backup ? {...bank.backup} : null,
+      };
+    } else {
+      // A single variant picked from the popup — current or previous save,
+      // either way it becomes this slot's whole (main) content. It must
+      // never land as backup-only: a bank with no main file is not
+      // something Torso can load.
+      const info = bank[payload.variant];
+      if(!info) return;
+      targetSlots[i] = {
+        sourceLabel: src.label, bank: payload.bank,
+        main: {...info},
+        backup: null,
+      };
+    }
+    renderTarget();
+  }
+
+  // Makes an element draggable and carries {sourceId, bank, variant} as the
+  // drag payload. Only toggles a lightweight class on drag start/end —
+  // never triggers a re-render, since replacing the dragged node mid-gesture
+  // would break the native drag operation.
+  function wireDraggable(el, getPayload){
+    el.draggable = true;
+    el.addEventListener('dragstart', (e)=>{
+      const payload = getPayload();
+      const isMove = payload.origin === 'target' || payload.origin === 'rearrange';
+      e.dataTransfer.effectAllowed = isMove ? 'move' : 'copy';
+      e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+      if(isMove) e.dataTransfer.setData('application/x-t1bd-move', '1');
+      el.classList.add('dragging');
+    });
+    el.addEventListener('dragend', ()=>{
+      el.classList.remove('dragging');
+      mouseIsDown = false;
+      // Dragging out of the popover suppresses the normal mouseleave that
+      // would otherwise schedule it to close, so an unpinned popover would
+      // be stuck open forever. A pinned one stays open on purpose (so you
+      // can drag several versions out one after another).
+      if(el.classList.contains('hp-item') && !popoverPinned) closePopover();
+    });
+  }
+
+  const ARROW_ICON = '<svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L12 12 M12 6 V12 H6"/></svg>';
+  const CROSS_ICON = '<svg viewBox="0 0 16 16" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4 L12 12 M12 4 L4 12"/></svg>';
+
+  // Every whole-bank-safe variant for a given UI bank number, grouped by the
+  // backup it came from (main + its own previous-save, if any), gathered
+  // across every uploaded backup — not just the one project this pad
+  // belongs to. Groups are ordered newest-first by their highest revision.
+  function getVariantsGrouped(uiBank){
+    const groups = [];
+    for(const s of sources){
+      const b = s.banks[uiBank];
+      if(!b) continue;
+      const items = [];
+      if(b.main) items.push({variant:'main', rawFile:b.rawFile, ...b.main});
+      if(b.backup) items.push({variant:'backup', rawFile:b.rawFile+'-backup', ...b.backup});
+      if(!items.length) continue;
+      items.sort((a,c)=> c.rev - a.rev);
+      groups.push({sourceId:s.id, sourceLabel:s.label, exportedAround:s.exportedAround, items, maxRev: Math.max(...items.map(i=>i.rev))});
+    }
+    groups.sort((a,b)=> b.maxRev - a.maxRev);
+    return groups;
+  }
+
+  let mouseIsDown = false;
+  document.addEventListener('mousedown', ()=>{ mouseIsDown = true; });
+  document.addEventListener('mouseup', ()=>{ mouseIsDown = false; });
+
+  function cancelHide(){ if(hideTimer){ clearTimeout(hideTimer); hideTimer = null; } }
+  function scheduleHide(){
+    cancelHide();
+    hideTimer = setTimeout(()=>{
+      if(mouseIsDown){ scheduleHide(); return; } // still mid-drag — check again shortly instead of closing
+      if(!popoverPinned) closePopover();
+    }, 380);
+  }
+  function closePopover(){
+    popoverPinned = false;
+    popoverBank = null;
+    popoverTargetSlot = null;
+    historyPopover.hidden = true;
+  }
+
+  // Flat, newest-first list of distinct saved states for a bank across every
+  // loaded backup. Two backups can share the exact same state (nothing
+  // changed between sessions) — same revision + size means byte-identical
+  // content, so those collapse into a single entry instead of looking like
+  // an unexplained duplicate.
+  function getDistinctVariants(uiBank){
+    const groups = getVariantsGrouped(uiBank);
+    const flat = groups.flatMap(g => g.items.map(it => ({...it, sourceId:g.sourceId, sourceLabel:g.sourceLabel})));
+    flat.sort((a,b)=> b.rev - a.rev);
+    // Same revision + size means the same actual save, even if one backup
+    // now has it as "Previous save" while an older backup still calls the
+    // very same content "Current" — that's one version, not two.
+    const byKey = new Map();
+    for(const it of flat){
+      const key = it.rev + '|' + it.size;
+      const existing = byKey.get(key);
+      if(!existing || (existing.variant === 'backup' && it.variant === 'main')){
+        byKey.set(key, it);
+      }
+    }
+    return Array.from(byKey.values()).sort((a,b)=> b.rev - a.rev);
+  }
+
+  function rebuildPopoverItems(uiBank){
+    const items = getDistinctVariants(uiBank);
+    hpTitle.textContent = `Bank ${uiBank} · versions`;
+    hpList.innerHTML = '';
+
+    if(items.length === 0){ closePopover(); return; }
+
+    const currentCount = items.filter(v=>v.variant!=='backup').length;
+    const backupCount = items.filter(v=>v.variant==='backup').length;
+
+    items.forEach(v=>{
+      const isBackup = v.variant==='backup';
+      const ambiguous = (isBackup ? backupCount : currentCount) > 1;
+      const itemSrc = sources.find(s=>s.id===v.sourceId);
+      const canDelete = !!(itemSrc && itemSrc.rearranging);
+
+      const item = document.createElement('div');
+      item.className = 'hp-item';
+      const displayLabel = v.originLabel || v.sourceLabel;
+      item.innerHTML = `${canDelete ? `<button class="clear" title="Remove this version">${CROSS_ICON}</button>` : ''}
+        <span class="hp-headline">${isBackup ? 'Previous save' : 'Current'}${ambiguous ? ' — ' + escapeHtml(displayLabel) : ''}</span>
+        <span class="hp-meta">${fmtSize(v.size)} · rev ${v.rev}</span>`;
+      wireDraggable(item, ()=>{
+        cancelHide();
+        return {sourceId:v.sourceId, bank:uiBank, variant:v.variant};
+      });
+      item.addEventListener('contextmenu', (e)=>{
+        e.preventDefault();
+        const onCopy = ()=>{
+          const clean = {size:v.size, rev:v.rev, version:v.version, bytes:v.bytes, originLabel:v.originLabel};
+          cellClipboard = {
+            sourceLabel: v.sourceLabel, bank: uiBank,
+            main: v.variant==='main' ? clean : null,
+            backup: v.variant==='backup' ? clean : null,
+          };
+        };
+        openCellContextMenu(e.clientX, e.clientY, {onCopy, onPaste:null});
+      });
+      const clearBtn = item.querySelector('.clear');
+      if(clearBtn){
+        clearBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          const s = sources.find(x=>x.id===v.sourceId);
+          if(!s) return;
+          const bank = s.banks[uiBank];
+          if(!bank) return;
+          if(v.variant === 'backup'){
+            bank.backup = null;
+          } else if(bank.backup){
+            // No "Current" without a "Previous save" left behind untouched —
+            // removing Current just reverts this bank to its previous save.
+            bank.main = bank.backup;
+            bank.backup = null;
+          } else {
+            delete s.banks[uiBank];
+          }
+          renderSources();
+          rebuildPopoverItems(uiBank);
+        });
+      }
+      hpList.appendChild(item);
+    });
+  }
+
+  function openPopover(anchorEl, uiBank){
+    popoverBank = uiBank;
+    popoverTargetSlot = null;
+    rebuildPopoverItems(uiBank);
+    positionPopover(anchorEl);
+    historyPopover.hidden = false;
+  }
+
+  // Info popover for a filled slot in the new project — once dragged in,
+  // a bank loses every visual trace of where it came from, so this is the
+  // one place that still says which backup, and what it's carrying (the
+  // current save, its previous save, or both together). Purely informational
+  // — nothing here is draggable, so it's styled as plain text, not a cell.
+  function openSlotInfoPopover(anchorEl, slot, targetIndex){
+    popoverTargetSlot = targetIndex;
+    popoverBank = null;
+
+    hpTitle.textContent = `Slot ${targetIndex}`;
+    hpList.innerHTML = '';
+
+    const variants = [];
+    if(slot.main) variants.push({variant:'main', info:slot.main});
+    if(slot.backup) variants.push({variant:'backup', info:slot.backup});
+
+    variants.forEach(({variant, info})=>{
+      const isBackup = variant === 'backup';
+      const item = document.createElement('div');
+      item.className = 'hp-item';
+      item.innerHTML = `<button class="clear" title="Remove just this from the slot">${CROSS_ICON}</button>
+        <span class="hp-headline">${isBackup ? 'Previous save' : 'Current'}</span>
+        <span class="hp-meta">${fmtSize(info.size)} · rev ${info.rev}</span>
+        <span class="hp-from">from ${escapeHtml(info.originLabel || slot.sourceLabel)}</span>`;
+      wireDraggable(item, ()=>{
+        cancelHide();
+        return { bank: slot.bank, variant, sourceLabel: slot.sourceLabel, direct: {size:info.size, rev:info.rev, version:info.version, bytes:info.bytes, originLabel:info.originLabel} };
+      });
+      item.addEventListener('contextmenu', (e)=>{
+        e.preventDefault();
+        const onCopy = ()=>{
+          cellClipboard = {
+            sourceLabel: slot.sourceLabel, bank: slot.bank,
+            main: variant==='main' ? {...info} : null,
+            backup: variant==='backup' ? {...info} : null,
+          };
+        };
+        openCellContextMenu(e.clientX, e.clientY, {onCopy, onPaste:null});
+      });
+      item.querySelector('.clear').addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const t = targetSlots[targetIndex];
+        if(!t) return;
+        if(variant === 'backup'){
+          t.backup = null;
+        } else if(t.backup){
+          // No "Current" without a "Previous save" left dangling — dropping
+          // Current just reverts this slot to its previous save.
+          t.main = t.backup;
+          t.backup = null;
+        } else {
+          targetSlots[targetIndex] = null;
+        }
+        renderTarget();
+        reopenSlotInfoPopover(targetIndex);
+      });
+      hpList.appendChild(item);
+    });
+
+    positionPopover(anchorEl);
+    historyPopover.hidden = false;
+  }
+
+  // renderTarget() rebuilds every slot's DOM, so the popover's anchor button
+  // goes stale the moment a clear-button click above triggers a re-render —
+  // find the fresh one (or close up if the slot's now empty) instead.
+  function reopenSlotInfoPopover(targetIndex){
+    const slot = targetSlots[targetIndex];
+    if(!slot){ closePopover(); return; }
+    const pads = document.querySelectorAll('#targetGrid .pad');
+    const pad = pads[targetIndex - 1];
+    const btn = pad ? pad.querySelector('.histbtn') : null;
+    if(!btn){ closePopover(); return; }
+    openSlotInfoPopover(btn, slot, targetIndex);
+  }
+
+  function positionPopover(anchorEl){
+    const r = anchorEl.getBoundingClientRect();
+    historyPopover.hidden = false;
+    const pw = historyPopover.offsetWidth || 260;
+    let left = r.left + r.width/2 - pw/2;
+    left = Math.max(8, Math.min(left, window.innerWidth - pw - 8));
+    let top = r.bottom + 8;
+    const ph = historyPopover.offsetHeight || 160;
+    if(top + ph > window.innerHeight - 8) top = r.top - ph - 8;
+    historyPopover.style.left = left + 'px';
+    historyPopover.style.top = Math.max(8, top) + 'px';
+  }
+
+  historyPopover.addEventListener('mouseenter', cancelHide);
+  historyPopover.addEventListener('mouseleave', ()=> scheduleHide());
+  hpClose.addEventListener('click', closePopover);
+  document.addEventListener('click', (e)=>{
+    if(historyPopover.hidden) return;
+    const path = e.composedPath();
+    if(path.includes(historyPopover)) return;
+    if(path.some(el => el.classList && el.classList.contains && el.classList.contains('histbtn'))) return;
+    if(path.some(el => el.id === 'targetGrid')) return; // placing into target slots shouldn't close the popover
+    closePopover();
+  });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closePopover(); });
+  window.addEventListener('scroll', ()=>{ if(!historyPopover.hidden) closePopover(); }, true);
+
+  // Right-click copy/paste — a small shared clipboard so a bank (a "starter
+  // template" pattern, say) can be duplicated into several slots instead of
+  // dragging it over one at a time.
+  function openCellContextMenu(x, y, {onCopy, onPaste}){
+    cellContextMenu.innerHTML = '';
+    if(!onCopy && !onPaste){ cellContextMenu.hidden = true; return; }
+    if(onCopy){
+      const b = document.createElement('button');
+      b.className = 'cm-item';
+      b.textContent = 'Copy';
+      b.addEventListener('click', ()=>{ onCopy(); closeCellContextMenu(); });
+      cellContextMenu.appendChild(b);
+    }
+    if(onPaste){
+      const b = document.createElement('button');
+      b.className = 'cm-item';
+      b.textContent = 'Paste';
+      b.addEventListener('click', ()=>{ onPaste(); closeCellContextMenu(); });
+      cellContextMenu.appendChild(b);
+    }
+    cellContextMenu.style.left = '-9999px';
+    cellContextMenu.hidden = false;
+    const rect = cellContextMenu.getBoundingClientRect();
+    let left = Math.min(x, window.innerWidth - rect.width - 8);
+    let top = Math.min(y, window.innerHeight - rect.height - 8);
+    cellContextMenu.style.left = Math.max(8, left) + 'px';
+    cellContextMenu.style.top = Math.max(8, top) + 'px';
+  }
+  function closeCellContextMenu(){ cellContextMenu.hidden = true; }
+
+  document.addEventListener('click', (e)=>{
+    if(cellContextMenu.hidden) return;
+    if(e.composedPath().includes(cellContextMenu)) return;
+    closeCellContextMenu();
+  });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeCellContextMenu(); });
+  window.addEventListener('scroll', ()=>{ closeCellContextMenu(); }, true);
+  window.addEventListener('contextmenu', (e)=>{
+    if(!e.target.closest('.pad') && !e.target.closest('.hp-item')) closeCellContextMenu();
+  });
+
+
+  function renderSources(){
+    sourcesCol.querySelectorAll('.project').forEach(el=>el.remove());
+
+    sources.forEach(src=>{
+      const usedCount = Object.keys(src.banks).length;
+      const card = document.createElement('div');
+      card.className = 'project';
+
+      const head = document.createElement('div');
+      head.className = 'project-head';
+      const exported = fmtDate(src.exportedAround);
+      head.innerHTML = `<div class="name">${escapeHtml(src.label)}</div>
+        <div class="count">${usedCount} / 16${exported ? ` <span class="exported-hint" title="When this backup .zip was exported, from its file timestamps — not when each bank was actually last saved">· ~${exported}</span>` : ''}</div>
+        <button class="rm" title="Remove this backup" aria-label="Remove this backup">×</button>`;
+      head.querySelector('.rm').addEventListener('click', ()=>{
+        sources = sources.filter(s=>s!==src);
+        renderSources(); renderTarget(); renderSettingsOptions();
+      });
+      card.appendChild(head);
+
+      const grid = document.createElement('div');
+      grid.className = 'padgrid';
+
+      for(let n=1;n<=16;n++){
+        const bank = src.banks[n];
+        const pad = document.createElement('div');
+
+        if(!bank){
+          pad.className = 'pad empty';
+          pad.innerHTML = `<span class="bn">${n}</span>`;
+        } else {
+          const variant = bank.main ? 'main' : 'backup';
+          const info = bank[variant];
+          pad.className = 'pad filled';
+          const totalVariants = getDistinctVariants(n).length;
+          pad.innerHTML = `${src.rearranging ? `<button class="clear" title="Remove bank ${n} from this backup">${CROSS_ICON}</button>` : ''}
+            <span class="bn">${n}</span>
+            <span class="meta">${fmtSize(info.size)}</span>
+            ${totalVariants>1 ? `<button class="histbtn${(popoverPinned && popoverBank===n) ? ' active' : ''}" title="Other versions of this bank">${ARROW_ICON}</button>` : ''}`;
+          pad.title = `${fmtSize(info.size)} · rev ${info.rev}${variant==='backup'?' (previous save)':''} · ${bank.rawFile}${variant==='backup'?'-backup':''}`;
+          pad.setAttribute('aria-label', `Bank ${n}, ${fmtSize(info.size)}, revision ${info.rev}${variant==='backup'?', previous version':''}`);
+
+          const clearBtn = pad.querySelector('.clear');
+          if(clearBtn){
+            clearBtn.addEventListener('click', (e)=>{
+              e.stopPropagation();
+              delete src.banks[n];
+              renderSources();
+            });
+          }
+
+          const histBtn = pad.querySelector('.histbtn');
+          if(histBtn){
+            histBtn.addEventListener('mouseenter', ()=>{
+              cancelHide();
+              if(!popoverPinned) openPopover(histBtn, n);
+            });
+            histBtn.addEventListener('mouseleave', ()=> scheduleHide());
+            histBtn.addEventListener('click', (e)=>{
+              e.stopPropagation();
+              popoverPinned = true;
+              openPopover(histBtn, n);
+            });
+          }
+
+          wireDraggable(pad, ()=>({sourceId:src.id, bank:n, variant, both:true, origin: src.rearranging ? 'rearrange' : undefined}));
+        }
+
+        // While rearranging, every cell (empty or filled) accepts drops:
+        // a whole-cell drag from another rearranging cell swaps/moves the
+        // two; a whole bank or single version dragged in from anywhere
+        // else (including the version popover) just copies into this cell.
+        if(src.rearranging){
+          pad.addEventListener('dragover', (e)=>{
+            e.preventDefault();
+            e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/x-t1bd-move') ? 'move' : 'copy';
+            pad.classList.add('drag-over');
+          });
+          pad.addEventListener('dragleave', ()=> pad.classList.remove('drag-over'));
+          pad.addEventListener('drop', (e)=>{
+            e.preventDefault();
+            pad.classList.remove('drag-over');
+            let data;
+            try{ data = JSON.parse(e.dataTransfer.getData('text/plain')); }catch(err){ return; }
+            if(!data || !data.bank) return;
+
+            if(data.direct){
+              src.banks[n] = {
+                main: data.variant==='main' ? {...data.direct} : null,
+                backup: data.variant==='backup' ? {...data.direct} : null,
+                rawFile: (n-1) + '.t1',
+              };
+              renderSources();
+              return;
+            }
+            if(!data.sourceId) return;
+
+            if(data.origin === 'rearrange'){
+              const originSrc = sources.find(s => s.id === data.sourceId);
+              if(!originSrc || !originSrc.rearranging) return;
+              const bank = originSrc.banks[data.bank];
+              if(!bank) return;
+
+              if(originSrc === src){
+                // Same project: a genuine rearrange — move/swap within it.
+                if(data.bank === n) return;
+                const tmp = originSrc.banks[data.bank];
+                const destCurrent = src.banks[n];
+                if(destCurrent) originSrc.banks[data.bank] = destCurrent; else delete originSrc.banks[data.bank];
+                if(tmp) src.banks[n] = tmp; else delete src.banks[n];
+                if(originSrc.banks[data.bank]) originSrc.banks[data.bank].rawFile = (data.bank-1) + '.t1';
+                if(src.banks[n]) src.banks[n].rawFile = (n-1) + '.t1';
+              } else {
+                // Different project: copy only — the origin backup is untouched.
+                src.banks[n] = {
+                  main: bank.main ? {...bank.main} : null,
+                  backup: bank.backup ? {...bank.backup} : null,
+                  rawFile: (n-1) + '.t1',
+                };
+              }
+              renderSources();
+              return;
+            }
+
+            // A single version dragged from the popover, or a whole bank
+            // dragged in from a backup that isn't itself being rearranged —
+            // either way this is a one-way copy into this cell.
+            const originSrc = sources.find(s => s.id === data.sourceId);
+            if(!originSrc) return;
+            const bank = originSrc.banks[data.bank];
+            if(!bank) return;
+            if(data.both){
+              if(!bank.main && !bank.backup) return;
+              src.banks[n] = {
+                main: bank.main ? {...bank.main} : null,
+                backup: bank.backup ? {...bank.backup} : null,
+                rawFile: (n-1) + '.t1',
+              };
+            } else {
+              const info = bank[data.variant];
+              if(!info) return;
+              src.banks[n] = { main: {...info}, backup: null, rawFile: (n-1) + '.t1' };
+            }
+            renderSources();
+          });
+        }
+
+        // Right-click: copy this bank's content — both its current save
+        // and its previous save together, like dragging it does — or paste
+        // a previously copied bundle here (only while rearranging).
+        pad.addEventListener('contextmenu', (e)=>{
+          e.preventDefault();
+          const currentBank = src.banks[n];
+          const onCopy = currentBank ? ()=>{
+            cellClipboard = {
+              sourceLabel: src.label, bank: n,
+              main: currentBank.main ? {...currentBank.main} : null,
+              backup: currentBank.backup ? {...currentBank.backup} : null,
+            };
+          } : null;
+          const onPaste = (src.rearranging && cellClipboard) ? ()=>{
+            src.banks[n] = {
+              main: cellClipboard.main ? {...cellClipboard.main} : null,
+              backup: cellClipboard.backup ? {...cellClipboard.backup} : null,
+              rawFile: (n-1)+'.t1',
+            };
+            renderSources();
+          } : null;
+          openCellContextMenu(e.clientX, e.clientY, {onCopy, onPaste});
+        });
+
+        grid.appendChild(pad);
+      }
+      card.appendChild(grid);
+
+      const footer = document.createElement('div');
+      footer.className = 'project-notes-block';
+
+      const notesActive = src.notesEditing;
+      const rearrangeActive = src.rearranging;
+      let notesTextarea = null;
+
+      if(notesActive){
+        notesTextarea = document.createElement('textarea');
+        notesTextarea.className = 'notes-textarea';
+        notesTextarea.rows = 4;
+        notesTextarea.value = src.notes || '';
+        notesTextarea.placeholder = "Your notes about this project and the banks in it will help you remember what's what next time you open it here. Jot down memories of individual banks, or anything else you find useful.";
+        notesTextarea.addEventListener('input', ()=> autoResizeTextarea(notesTextarea));
+        footer.appendChild(notesTextarea);
+      } else if(src.notes){
+        const notes = document.createElement('div');
+        notes.className = 'project-notes';
+        notes.textContent = src.notes;
+        footer.appendChild(notes);
+      }
+
+      if(rearrangeActive){
+        const hint = document.createElement('div');
+        hint.className = 'rearrange-hint';
+        hint.textContent = 'Drag cells to reorder them within this backup, or between two backups that are both in this mode.';
+        footer.appendChild(hint);
+      }
+
+      if(!notesActive || !rearrangeActive){
+        const linksRow = document.createElement('div');
+        linksRow.className = 'project-links-row';
+        if(!notesActive){
+          const notesLink = document.createElement('button');
+          notesLink.className = 'linklike';
+          notesLink.textContent = src.notes ? 'edit note' : '+ add a note';
+          notesLink.addEventListener('click', ()=>{ src.notesEditing = true; renderSources(); });
+          linksRow.appendChild(notesLink);
+        }
+        if(!rearrangeActive){
+          const rearrangeLink = document.createElement('button');
+          rearrangeLink.className = 'linklike';
+          rearrangeLink.textContent = 'rearrange cells';
+          rearrangeLink.addEventListener('click', ()=>{
+            src.rearranging = true;
+            src.rearrangeSnapshot = cloneBanks(src.banks);
+            renderSources();
+          });
+          linksRow.appendChild(rearrangeLink);
+        }
+        footer.appendChild(linksRow);
+      }
+
+      // One shared save/cancel row covers whichever of the two modes is
+      // active (or both at once) — no more duplicated action rows.
+      if(notesActive || rearrangeActive){
+        const actions = document.createElement('div');
+        actions.className = 'notes-actions';
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'linklike';
+        saveBtn.textContent = 'save & download copy';
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'linklike';
+        cancelBtn.textContent = 'cancel';
+        const status = document.createElement('span');
+        status.className = 'notes-status';
+        actions.append(saveBtn, cancelBtn, status);
+        footer.appendChild(actions);
+        if(notesTextarea) notesTextarea.focus();
+
+        cancelBtn.addEventListener('click', ()=>{
+          if(rearrangeActive){
+            src.banks = cloneBanks(src.rearrangeSnapshot);
+            src.rearrangeSnapshot = null;
+            src.rearranging = false;
+          }
+          if(notesActive) src.notesEditing = false;
+          renderSources();
+        });
+        saveBtn.addEventListener('click', async ()=>{
+          saveBtn.disabled = true;
+          status.textContent = 'Building…';
+          try{
+            const noteText = notesActive ? notesTextarea.value.trim() : (src.notes || '');
+            await reexportSourceWithNotes(src, noteText);
+            src.notes = noteText;
+            status.textContent = 'Downloaded — replace your old ' + src.label + '.zip with this one.';
+            setTimeout(()=>{
+              src.notesEditing = false;
+              src.rearranging = false;
+              src.rearrangeSnapshot = null;
+              renderSources();
+            }, 2600);
+          }catch(e){
+            status.textContent = 'Error: ' + e.message;
+            saveBtn.disabled = false;
+          }
+        });
+      }
+
+      card.appendChild(footer);
+      sourcesCol.insertBefore(card, addTile);
+      if(notesTextarea) autoResizeTextarea(notesTextarea);
+    });
+  }
+
+  function renderTarget(){
+    targetGrid.innerHTML = '';
+    let filled = 0;
+    for(let i=1;i<=16;i++){
+      const slot = targetSlots[i];
+      const pad = document.createElement('div');
+      pad.className = 'pad tgt' + (slot ? ' filled' : ' empty');
+      if(slot){
+        filled++;
+        const primary = slot.main || slot.backup;
+        pad.innerHTML = `<button class="clear" title="Clear slot ${i}">${CROSS_ICON}</button>
+          <span class="bn">${i}</span>
+          <span class="meta">${fmtSize(primary.size)}</span>
+          <button class="histbtn${(popoverPinned && popoverTargetSlot===i) ? ' active' : ''}" title="What's in this slot">${ARROW_ICON}</button>`;
+        const bothNote = (slot.main && slot.backup) ? ' (current + previous save)' : (slot.backup && !slot.main ? ' (previous save)' : '');
+        const primaryLabel = primary.originLabel || slot.sourceLabel;
+        pad.title = `${primaryLabel} · bank ${slot.bank}${bothNote}`;
+        pad.setAttribute('aria-label', `Slot ${i}: bank ${slot.bank} from ${primaryLabel}`);
+        pad.querySelector('.clear').addEventListener('click', (e)=>{
+          e.stopPropagation();
+          targetSlots[i] = null;
+          renderTarget();
+        });
+        const infoBtn = pad.querySelector('.histbtn');
+        infoBtn.addEventListener('mouseenter', ()=>{
+          cancelHide();
+          if(!popoverPinned) openSlotInfoPopover(infoBtn, slot, i);
+        });
+        infoBtn.addEventListener('mouseleave', ()=> scheduleHide());
+        infoBtn.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          popoverPinned = true;
+          openSlotInfoPopover(infoBtn, slot, i);
+        });
+      } else {
+        pad.innerHTML = `<span class="bn">${i}</span>`;
+        pad.setAttribute('aria-label', `Slot ${i}: empty`);
+      }
+
+      pad.addEventListener('dragover', (e)=>{
+        e.preventDefault();
+        e.dataTransfer.dropEffect = e.dataTransfer.types.includes('application/x-t1bd-move') ? 'move' : 'copy';
+        pad.classList.add('drag-over');
+      });
+      pad.addEventListener('dragleave', ()=> pad.classList.remove('drag-over'));
+      pad.addEventListener('drop', (e)=>{
+        e.preventDefault();
+        pad.classList.remove('drag-over');
+        let data;
+        try{ data = JSON.parse(e.dataTransfer.getData('text/plain')); }catch(err){ return; }
+        if(!data) return;
+        if(data.origin === 'target' && typeof data.originSlot === 'number'){
+          if(data.originSlot !== i){
+            targetSlots[i] = targetSlots[data.originSlot];
+            targetSlots[data.originSlot] = null;
+            renderTarget();
+          }
+          return;
+        }
+        if(!data.bank) return;
+        assignSlot(i, data);
+      });
+      if(slot){
+        wireDraggable(pad, ()=>({bank:slot.bank, origin:'target', originSlot:i}));
+      }
+
+      pad.addEventListener('contextmenu', (e)=>{
+        e.preventDefault();
+        const onCopy = slot ? ()=>{
+          cellClipboard = {sourceLabel:slot.sourceLabel, bank:slot.bank, main:slot.main, backup:slot.backup};
+        } : null;
+        const onPaste = cellClipboard ? ()=>{
+          targetSlots[i] = {sourceLabel:cellClipboard.sourceLabel, bank:cellClipboard.bank, main:cellClipboard.main, backup:cellClipboard.backup};
+          renderTarget();
+        } : null;
+        openCellContextMenu(e.clientX, e.clientY, {onCopy, onPaste});
+      });
+
+      targetGrid.appendChild(pad);
+    }
+    filledCountEl.textContent = filled;
+    exportBtn.disabled = filled === 0;
+  }
+
+  clearAllBtn.addEventListener('click', ()=>{
+    if(targetSlots.some(Boolean) && !confirm('Clear all 16 slots of the new project?')) return;
+    targetSlots = new Array(17).fill(null);
+    renderTarget();
+  });
+
+  addTile.addEventListener('click', ()=>fileInput.click());
+  addTile.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' ') fileInput.click(); });
+  fileInput.addEventListener('change', (e)=>{
+    const picked = Array.from(e.target.files);
+    fileInput.value = '';
+    handleFiles(picked);
+  });
+  ['dragover','dragenter'].forEach(ev=>addTile.addEventListener(ev, e=>{e.preventDefault(); addTile.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>addTile.addEventListener(ev, e=>{e.preventDefault(); addTile.classList.remove('drag');}));
+  addTile.addEventListener('drop', e=>{ handleFiles(Array.from(e.dataTransfer.files)); });
+
+  function syncThemeToggleUI(){
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    themeToggle.setAttribute('aria-checked', String(isLight));
+    themeToggle.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme');
+  }
+  syncThemeToggleUI();
+  themeToggle.addEventListener('click', ()=>{
+    const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    try{ localStorage.setItem('t1bd-theme', next); }catch(e){ /* storage unavailable — theme just won't persist */ }
+    syncThemeToggleUI();
+  });
+
+  exportBtn.addEventListener('click', async ()=>{
+    exportBtn.disabled = true;
+    exportStatus.textContent = 'Building archive…';
+    try{
+      const newZip = new MiniZipWriter();
+      for(let i=1;i<=16;i++){
+        const slot = targetSlots[i];
+        if(!slot) continue;
+        if(slot.main) newZip.file(`${i-1}.t1`, slot.main.bytes);
+        if(slot.backup) newZip.file(`${i-1}.t1-backup`, slot.backup.bytes);
+      }
+      const settingsId = settingsSource.value;
+      if(settingsId){
+        const src = sources.find(s=>s.id===settingsId);
+        if(src){
+          if(src.settingsText) newZip.file('Settings.json', src.settingsText);
+          if(src.wifiText) newZip.file('Wifi.json', src.wifiText);
+        }
+      }
+      const blob = await newZip.generateAsync({type:'blob', comment: exportNotes.value.trim()});
+      let name = exportName.value.trim() || 'torso-merged-project.zip';
+      if(!name.toLowerCase().endsWith('.zip')) name += '.zip';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 4000);
+      exportStatus.textContent = 'Done: ' + name + ' downloaded. Unzip it and copy the files onto Torso\'s storage.';
+    }catch(e){
+      exportStatus.textContent = 'Error building archive: ' + e.message;
+    }finally{
+      exportBtn.disabled = targetSlots.every(s=>!s);
+    }
+  });
+
+  renderTarget();
+})();
+</script>
+</body>
+</html>
