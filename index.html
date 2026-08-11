@@ -146,7 +146,10 @@
   .project-head .rm:hover{color:var(--text);background:var(--panel-2);}
   .project-notes{
     font-size:11.5px;color:var(--text-secondary);line-height:1.5;
-    margin-top:10px;overflow-wrap:anywhere;
+    margin-top:10px;overflow-wrap:anywhere;white-space:pre-wrap;
+  }
+  .project-notes + .project-links-row{
+    margin-top:10px;padding-top:10px;border-top:1px solid var(--panel-border);
   }
   .project-notes-block{margin-top:2px;}
   .notes-textarea{
@@ -356,18 +359,18 @@
     <div class="body">
       <p>Torso saves each Bank as its own file. This tool moves, copies, and rearranges those files between backups — it never opens or changes what's inside a pattern, so there's no way it can touch your patterns, CC data, or anything else you've programmed.</p>
       <p>Drag a bank from any loaded backup straight into New Project to use it there — the original stays put, so the same bank can go into several slots if you want. Dragging the whole cell carries its current save and its previous save together; grab just one specific version instead from the small arrow icon in the corner.</p>
-      <p>Many banks have an earlier saved version sitting right behind the current one. When that's the case, hover the arrow icon to see every version you've got for that bank — across every backup you've loaded, not just this one — or click it to pin the list open while you drag pieces around. It's the easiest way to dig up an old take you thought was gone.</p>
-      <p>Each loaded backup can carry its own notes — click "add a note" under any project to jot down what's in it. Notes are saved right inside the .zip itself, so they're there again next time you drop that same file back in, even on a different computer.</p>
-      <p>Want to reorganize a backup itself, not just build something new from it? Click "rearrange cells" on any loaded project to drag banks around within it — or between two backups you've both put in rearrange mode — then "save & download copy" for a new .zip with the new layout. Replace your old file with it to keep the change.</p>
-      <p>Right-click any bank to Copy it, then right-click an empty or filled cell to Paste — handy for stamping the same starter template (a scale, a CV setup, whatever you like to improvise from) into several slots at once, in New Project or while rearranging a backup.</p>
+      <p>That same arrow icon works on every filled bank, however many versions it has. Hover it to see the size, revision, and — importantly — where each version originally came from: which archive, and which bank number it started out as. That last part keeps following a bank around even after it's been dragged elsewhere, split apart, or moved between backups any number of times. Click the icon to pin the list open while you drag pieces around, or right-click any bank (or any version in the list) to Copy it, then right-click an empty or filled cell elsewhere to Paste — handy for stamping the same starter template into several slots at once.</p>
+      <p>Each loaded backup can also carry its own notes — click "add a note" under any project to jot down what's in it.</p>
+      <p><strong>Where notes and origin actually live:</strong> both are stored in one place — the archive's own comment field, the same spot a .zip's built-in "add a description" feature would use. Some archive tools surface it (often as "comment" or "info" when you right-click a .zip), but plenty don't: on a Mac, neither Finder nor Keka show it — they just extract straight away, and Quick Look (spacebar) doesn't reveal it either. This only survives as long as this tool is the one repacking the file. Unzip and rezip a backup with any other program, and that comment — notes and origin both — is gone. It also never reaches the T‑1 itself: take a fresh backup from the device, and none of this carries over, so every bank in it looks brand new to this tool again.</p>
+      <p>Want to reorganize a backup itself, not just build something new from it? Click "rearrange cells" on any loaded project to drag banks around within it — or between two backups you've both put in rearrange mode — then "save & download copy" for a new .zip with the new layout. Replace your old file with it to keep the change. A small × appears on each bank (and on each version in its popup) while rearranging, for removing just that piece.</p>
       <p>Torso's Project backup format has changed across firmware versions over the T1's life, and this tool only understands the current one, introduced in firmware 2.1. Backups made on much older firmware may not open correctly here.</p>
       <hr>
       <p>Something you might want to know: inside Torso's own backup files, numbering starts from 0 — so what this tool (and the device screen) calls banks 1–16 are technically cells 0–15 on disk. Only matters if you're ever poking at the .zip by hand.</p>
     </div>
   </details>
 
-  <!-- VERSION NUMBER — bump this on every edit to this file. Currently: 1.008 -->
-  <p class="footnote">v1.008 · Built August 10, 2026 — tested against T1 firmware 2.1.5.<br>© 2026 Omi Makarenko. All rights reserved — reuse, adaptation, or redistribution requires prior written permission and credit to the author. Provided as-is with no warranty. Not affiliated with or endorsed by Torso Electronics.</p>
+  <!-- VERSION NUMBER — bump this on every edit to this file. Currently: 1.014 -->
+  <p class="footnote">v1.014 · Built August 11, 2026 — tested against T1 firmware 2.1.5.<br>© 2026 Omi Makarenko. All rights reserved — reuse, adaptation, or redistribution requires prior written permission and credit to the author. Provided as-is with no warranty. Not affiliated with or endorsed by Torso Electronics.</p>
 
   <div class="history-popover" id="historyPopover" hidden>
     <div class="hp-head">
@@ -592,6 +595,11 @@ class MiniZipWriter{
   let popoverTargetSlot = null;
   let hideTimer = null;
   let cellClipboard = null; // {sourceLabel, bank, variant, size, rev, version, bytes}
+  // JSON.stringify mangles a Uint8Array into a plain {"0":1,"1":2,...} object,
+  // not real bytes — so drag payloads never carry bytes directly. This plain
+  // JS variable is the side-channel for "direct" drags (splitting a New
+  // Project slot apart), read by the drop handler instead of the JSON data.
+  let dragDirectInfo = null;
 
   function parseHeader(bytes){
     const vlen = bytes[0];
@@ -626,7 +634,8 @@ class MiniZipWriter{
       }
       const label = file.name.replace(/\.zip$/i,'');
       const existingIdx = sources.findIndex(s => s.label === label);
-      const src = { id: existingIdx>=0 ? sources[existingIdx].id : 'src'+(idCounter++), label, banks: {}, settingsText:null, wifiText:null, exportedAround:null, notes: zip.comment || '', notesEditing:false, rearranging:false, rearrangeSnapshot:null };
+      const { notes, history } = parseComment(zip.comment);
+      const src = { id: existingIdx>=0 ? sources[existingIdx].id : 'src'+(idCounter++), label, banks: {}, settingsText:null, wifiText:null, exportedAround:null, notes, notesEditing:false, rearranging:false, rearrangeSnapshot:null };
 
       const entries = Object.keys(zip.files);
       let latestMtime = null;
@@ -644,7 +653,12 @@ class MiniZipWriter{
           let hdr;
           try{ hdr = parseHeader(bytes); }catch(e){ continue; }
           if(!src.banks[bank]) src.banks[bank] = {main:null, backup:null, rawFile: rawBank + '.t1'};
-          src.banks[bank][isBackup?'backup':'main'] = {...hdr, bytes, originLabel: label};
+          const recorded = history[`${bank}|${isBackup?'backup':'main'}`];
+          src.banks[bank][isBackup?'backup':'main'] = {
+            ...hdr, bytes,
+            originLabel: recorded ? recorded.label : label,
+            originBank: recorded ? recorded.bank : bank,
+          };
           if(entry.mtime && (!latestMtime || entry.mtime > latestMtime)) latestMtime = entry.mtime;
         } else if(base === 'Settings.json'){
           src.settingsText = await entry.async('string');
@@ -668,6 +682,51 @@ class MiniZipWriter{
 
   // A plain {...banks} shallow copy still shares each bank's own
   // {main,backup,rawFile} wrapper object with the original — so an in-place
+  // The archive comment holds two things, stacked: the person's free-form
+  // notes, then (if there's anything to say) a plain-English marker line
+  // followed by one "Slot N · Current/Previous save: from X, bank Y" line
+  // per saved bank — exactly the phrasing already shown on hover in the
+  // app, so it reads the same whether you're looking at it here or in a
+  // text editor. The marker is only matched by its <...> shape, not its
+  // exact wording, so old comments keep parsing even if this text changes
+  // later.
+  const HISTORY_MARKER = "<The lines below list each bank's original source archive and bank number — shown automatically on hover in T1 Backup Digger>";
+  const HISTORY_LINE_RE = /^Slot (\d+) · (Current|Previous save): from (.+), bank (\d+)\s*$/;
+
+  function buildHistoryLines(slots){
+    const lines = [];
+    for(const {slot, main, backup} of slots){
+      if(main) lines.push(`Slot ${slot} · Current: from ${main.originLabel || '?'}, bank ${main.originBank != null ? main.originBank : slot}`);
+      if(backup) lines.push(`Slot ${slot} · Previous save: from ${backup.originLabel || '?'}, bank ${backup.originBank != null ? backup.originBank : slot}`);
+    }
+    return lines;
+  }
+
+  function buildComment(notes, slots){
+    const lines = buildHistoryLines(slots);
+    if(lines.length === 0) return notes || '';
+    return (notes && notes.trim() ? notes.trim() + '\n\n' : '') + HISTORY_MARKER + '\n' + lines.join('\n');
+  }
+
+  function parseComment(comment){
+    if(!comment) return {notes:'', history:{}};
+    const markerLine = comment.split('\n').find(l => /^<.*>$/.test(l.trim()));
+    if(!markerLine) return {notes: comment.trim(), history:{}};
+    const idx = comment.indexOf(markerLine);
+    const notes = comment.slice(0, idx).trim();
+    const history = {};
+    for(const line of comment.slice(idx + markerLine.length).split('\n')){
+      const m = line.match(HISTORY_LINE_RE);
+      if(!m) continue;
+      const slot = parseInt(m[1],10);
+      const variant = m[2] === 'Current' ? 'main' : 'backup';
+      history[`${slot}|${variant}`] = { label: m[3], bank: parseInt(m[4],10) };
+    }
+    return {notes, history};
+  }
+
+  // A plain shallow copy still shares each bank's own
+  // {main,backup,rawFile} wrapper object with the original — so an in-place
   // edit to that wrapper (e.g. clearing just the backup) would leak into a
   // snapshot taken earlier and survive a Cancel. Clone one level deeper.
   function cloneBanks(banks){
@@ -689,16 +748,18 @@ class MiniZipWriter{
   // assembled project.
   async function reexportSourceWithNotes(src, noteText){
     const zip = new MiniZipWriter();
+    const slots = [];
     for(const bankNumStr of Object.keys(src.banks)){
       const bankNum = parseInt(bankNumStr, 10);
       const bank = src.banks[bankNumStr];
       const rawIndex = bankNum - 1; // UI shows 1–16, Torso's own files are 0–15
       if(bank.main) zip.file(`${rawIndex}.t1`, bank.main.bytes);
       if(bank.backup) zip.file(`${rawIndex}.t1-backup`, bank.backup.bytes);
+      slots.push({slot: bankNum, main: bank.main, backup: bank.backup});
     }
     if(src.settingsText) zip.file('Settings.json', src.settingsText);
     if(src.wifiText) zip.file('Wifi.json', src.wifiText);
-    const blob = await zip.generateAsync({type:'blob', comment: noteText});
+    const blob = await zip.generateAsync({type:'blob', comment: buildComment(noteText, slots)});
     const name = src.label + '.zip';
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -713,11 +774,11 @@ class MiniZipWriter{
   // (dragging one specific entry out of the version popover) carries only
   // that one state.
   function assignSlot(i, payload){
-    if(payload.direct){
+    if(payload.direct && dragDirectInfo){
       targetSlots[i] = {
         sourceLabel: payload.sourceLabel, bank: payload.bank,
-        main: payload.variant==='main' ? {...payload.direct} : null,
-        backup: payload.variant==='backup' ? {...payload.direct} : null,
+        main: payload.variant==='main' ? {...dragDirectInfo} : null,
+        backup: payload.variant==='backup' ? {...dragDirectInfo} : null,
       };
       renderTarget();
       return;
@@ -766,6 +827,7 @@ class MiniZipWriter{
     el.addEventListener('dragend', ()=>{
       el.classList.remove('dragging');
       mouseIsDown = false;
+      dragDirectInfo = null;
       // Dragging out of the popover suppresses the normal mouseleave that
       // would otherwise schedule it to close, so an unpinned popover would
       // be stuck open forever. A pinned one stays open on purpose (so you
@@ -846,21 +908,19 @@ class MiniZipWriter{
 
     if(items.length === 0){ closePopover(); return; }
 
-    const currentCount = items.filter(v=>v.variant!=='backup').length;
-    const backupCount = items.filter(v=>v.variant==='backup').length;
-
     items.forEach(v=>{
       const isBackup = v.variant==='backup';
-      const ambiguous = (isBackup ? backupCount : currentCount) > 1;
       const itemSrc = sources.find(s=>s.id===v.sourceId);
       const canDelete = !!(itemSrc && itemSrc.rearranging);
+      const originLabel = v.originLabel || v.sourceLabel;
+      const originBank = v.originBank || uiBank;
 
       const item = document.createElement('div');
       item.className = 'hp-item';
-      const displayLabel = v.originLabel || v.sourceLabel;
       item.innerHTML = `${canDelete ? `<button class="clear" title="Remove this version">${CROSS_ICON}</button>` : ''}
-        <span class="hp-headline">${isBackup ? 'Previous save' : 'Current'}${ambiguous ? ' — ' + escapeHtml(displayLabel) : ''}</span>
-        <span class="hp-meta">${fmtSize(v.size)} · rev ${v.rev}</span>`;
+        <span class="hp-headline">${isBackup ? 'Previous save' : 'Current'}</span>
+        <span class="hp-meta">${fmtSize(v.size)} · rev ${v.rev}</span>
+        <span class="hp-from">from ${escapeHtml(originLabel)}, bank ${originBank}</span>`;
       wireDraggable(item, ()=>{
         cancelHide();
         return {sourceId:v.sourceId, bank:uiBank, variant:v.variant};
@@ -868,7 +928,7 @@ class MiniZipWriter{
       item.addEventListener('contextmenu', (e)=>{
         e.preventDefault();
         const onCopy = ()=>{
-          const clean = {size:v.size, rev:v.rev, version:v.version, bytes:v.bytes, originLabel:v.originLabel};
+          const clean = {size:v.size, rev:v.rev, version:v.version, bytes:v.bytes, originLabel:v.originLabel, originBank:v.originBank};
           cellClipboard = {
             sourceLabel: v.sourceLabel, bank: uiBank,
             main: v.variant==='main' ? clean : null,
@@ -911,11 +971,9 @@ class MiniZipWriter{
     historyPopover.hidden = false;
   }
 
-  // Info popover for a filled slot in the new project — once dragged in,
-  // a bank loses every visual trace of where it came from, so this is the
-  // one place that still says which backup, and what it's carrying (the
-  // current save, its previous save, or both together). Purely informational
-  // — nothing here is draggable, so it's styled as plain text, not a cell.
+  // Shows what's in a New Project slot (its current save, its previous
+  // save, or both together) — each as its own draggable, clearable card,
+  // same as the version list on a loaded backup's own cells.
   function openSlotInfoPopover(anchorEl, slot, targetIndex){
     popoverTargetSlot = targetIndex;
     popoverBank = null;
@@ -929,15 +987,18 @@ class MiniZipWriter{
 
     variants.forEach(({variant, info})=>{
       const isBackup = variant === 'backup';
+      const originLabel = info.originLabel || slot.sourceLabel;
+      const originBank = info.originBank || slot.bank;
       const item = document.createElement('div');
       item.className = 'hp-item';
       item.innerHTML = `<button class="clear" title="Remove just this from the slot">${CROSS_ICON}</button>
         <span class="hp-headline">${isBackup ? 'Previous save' : 'Current'}</span>
         <span class="hp-meta">${fmtSize(info.size)} · rev ${info.rev}</span>
-        <span class="hp-from">from ${escapeHtml(info.originLabel || slot.sourceLabel)}</span>`;
+        <span class="hp-from">from ${escapeHtml(originLabel)}, bank ${originBank}</span>`;
       wireDraggable(item, ()=>{
         cancelHide();
-        return { bank: slot.bank, variant, sourceLabel: slot.sourceLabel, direct: {size:info.size, rev:info.rev, version:info.version, bytes:info.bytes, originLabel:info.originLabel} };
+        dragDirectInfo = info;
+        return { bank: slot.bank, variant, sourceLabel: slot.sourceLabel, direct: true };
       });
       item.addEventListener('contextmenu', (e)=>{
         e.preventDefault();
@@ -1090,11 +1151,10 @@ class MiniZipWriter{
           const variant = bank.main ? 'main' : 'backup';
           const info = bank[variant];
           pad.className = 'pad filled';
-          const totalVariants = getDistinctVariants(n).length;
           pad.innerHTML = `${src.rearranging ? `<button class="clear" title="Remove bank ${n} from this backup">${CROSS_ICON}</button>` : ''}
             <span class="bn">${n}</span>
             <span class="meta">${fmtSize(info.size)}</span>
-            ${totalVariants>1 ? `<button class="histbtn${(popoverPinned && popoverBank===n) ? ' active' : ''}" title="Other versions of this bank">${ARROW_ICON}</button>` : ''}`;
+            <button class="histbtn${(popoverPinned && popoverBank===n) ? ' active' : ''}" title="Version & origin info">${ARROW_ICON}</button>`;
           pad.title = `${fmtSize(info.size)} · rev ${info.rev}${variant==='backup'?' (previous save)':''} · ${bank.rawFile}${variant==='backup'?'-backup':''}`;
           pad.setAttribute('aria-label', `Bank ${n}, ${fmtSize(info.size)}, revision ${info.rev}${variant==='backup'?', previous version':''}`);
 
@@ -1142,10 +1202,10 @@ class MiniZipWriter{
             try{ data = JSON.parse(e.dataTransfer.getData('text/plain')); }catch(err){ return; }
             if(!data || !data.bank) return;
 
-            if(data.direct){
+            if(data.direct && dragDirectInfo){
               src.banks[n] = {
-                main: data.variant==='main' ? {...data.direct} : null,
-                backup: data.variant==='backup' ? {...data.direct} : null,
+                main: data.variant==='main' ? {...dragDirectInfo} : null,
+                backup: data.variant==='backup' ? {...dragDirectInfo} : null,
                 rawFile: (n-1) + '.t1',
               };
               renderSources();
@@ -1456,11 +1516,13 @@ class MiniZipWriter{
     exportStatus.textContent = 'Building archive…';
     try{
       const newZip = new MiniZipWriter();
+      const exportSlots = [];
       for(let i=1;i<=16;i++){
         const slot = targetSlots[i];
         if(!slot) continue;
         if(slot.main) newZip.file(`${i-1}.t1`, slot.main.bytes);
         if(slot.backup) newZip.file(`${i-1}.t1-backup`, slot.backup.bytes);
+        exportSlots.push({slot: i, main: slot.main, backup: slot.backup});
       }
       const settingsId = settingsSource.value;
       if(settingsId){
@@ -1470,7 +1532,7 @@ class MiniZipWriter{
           if(src.wifiText) newZip.file('Wifi.json', src.wifiText);
         }
       }
-      const blob = await newZip.generateAsync({type:'blob', comment: exportNotes.value.trim()});
+      const blob = await newZip.generateAsync({type:'blob', comment: buildComment(exportNotes.value.trim(), exportSlots)});
       let name = exportName.value.trim() || 'torso-merged-project.zip';
       if(!name.toLowerCase().endsWith('.zip')) name += '.zip';
       const url = URL.createObjectURL(blob);
@@ -1491,4 +1553,3 @@ class MiniZipWriter{
 </script>
 </body>
 </html>
-
